@@ -1,0 +1,385 @@
+#----------------------------------------------------------
+# NAMESPACES
+#----------------------------------------------------------
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Création du namespace
+#----------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: '2054198'
+  labels:
+    name: '2054198'
+---
+#----------------------------------------------------------
+# DEPLOYMENTS
+#----------------------------------------------------------
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Deployment du serveur PHP sur 10 replicas
+#----------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-deployment
+  namespace: '2054198'
+  labels:
+    app: php
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: php
+  template:
+    metadata:
+      labels:
+        app: php
+    spec:
+      containers:
+      - name: php
+        image: raphyrl/2054198-tp03:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /var/www/html/index.php
+          subPath : index.php
+          name: volume-raphyrl
+      volumes:
+      - name: volume-raphyrl
+        persistentVolumeClaim:
+          claimName: pvc-nfs
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Deployment du nextcloud
+#----------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud-deployment
+  namespace: '2054198'
+  labels:
+    app: nextcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      containers:
+      - name: nextcloud
+        image: nextcloud
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+          name: http-80
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /var/www/html
+          name: 2054198-nextcloud
+        env:
+          - name: NEXTCLOUD_TRUSTED_DOMAINS
+            value: 192.168.139.215 nextcloud.2054198.tp03 *.*.*.*
+          - name: MYSQL_HOST
+            value: mariadb-service
+        envFrom:
+        - secretRef:
+            name: nextcloud-secret
+      volumes:
+      - name: 2054198-nextcloud
+        persistentVolumeClaim:
+          claimName: 2054198-nextcloud
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Deployment du serveur mattermost
+#----------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost-deployment
+  namespace: '2054198'
+  labels:
+    app: mattermost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mattermost
+  template:
+    metadata:
+      labels:
+        app: mattermost
+    spec:
+      containers:
+      - name: mattermost
+        image: mattermost/mattermost-preview
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8065
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Deployment du serveur Mariadb
+#----------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: '2054198'
+  labels:
+    app: mariadb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3306
+        envFrom:
+        - secretRef:
+            name: mariadb-secret
+---
+#----------------------------------------------------------
+# SECRETS
+#----------------------------------------------------------
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Secret pour rensigner les vrariable d'environement a Mariadb
+#----------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-secret
+  namespace: '2054198'
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: c2VjcmV0  # secret                
+  MYSQL_USER: bmV4dGNsb3Vk       # nextcloud
+  MYSQL_PASSWORD: c2VjcmV0       # secret     
+  MYSQL_DATABASE: bmV4dGNsb3Vk   # nextcloud 
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Secret pour rensigner les vrariable d'environement a Nextcloud
+#----------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nextcloud-secret
+  namespace: '2054198'
+type: Opaque
+data:
+  NEXTCLOUD_ADMIN_USER: YWRtaW4= # admin
+  NEXTCLOUD_ADMIN_PASSWORD: YWRtaW4= # admin
+  MYSQL_USER: bmV4dGNsb3Vk    # nextcloud
+  MYSQL_PASSWORD: c2VjcmV0    # secret        
+  MYSQL_DATABASE: bmV4dGNsb3Vk # nextcloud
+---
+#----------------------------------------------------------
+# SERVICE
+#----------------------------------------------------------
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Service pour faire un renvoie de port des serveurs php 
+#----------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: php-service
+  namespace: '2054198'
+spec:
+  selector:
+    app: php
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Service pour faire un renvoie de port du serveur mattermost
+#----------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost-service
+  namespace: '2054198'
+spec:
+  selector:
+    app: mattermost
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8065
+
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Service pour faire un renvoie de port du serveur nextcloud
+#----------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-service
+  namespace: '2054198'
+spec:
+  selector:
+    app: nextcloud
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Service pour faire un renvoie de port du serveur mariadb
+#----------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-service
+  namespace: '2054198'
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+---
+#----------------------------------------------------------
+# INGRESS
+#----------------------------------------------------------
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Regles Ingress pour renvoyer les demandes sur les bon serveur
+#----------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-php
+  namespace: '2054198'
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: accueil.2054198.tp03
+    http:
+      paths:
+      - path: /
+        pathType : Prefix
+        backend:
+          service:
+            name: php-service
+            port:
+              number: 80
+  - host: nextcloud.2054198.tp03
+    http:
+      paths:
+      - path: /
+        pathType : Prefix
+        backend:
+          service:
+            name: nextcloud-service
+            port:
+              number: 80
+  - host: mattermost.2054198.tp03
+    http:
+      paths:
+      - path: /
+        pathType : Prefix
+        backend:
+          service:
+            name: mattermost-service
+            port:
+              number: 80
+--- 
+#----------------------------------------------------------
+# VOLUME
+#----------------------------------------------------------
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Volume persitent liée au serveur AWS, 3.140.197.109
+#----------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-nfs
+  namespace: '2054198'
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nfs
+  nfs:
+    server: 3.140.197.109
+    path: /var/nfs/tp03
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Réclamation d'une partie du volume persistant
+#----------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-nfs
+  namespace: '2054198'
+spec:
+  storageClassName: nfs
+  resources:
+    requests:
+      storage: 500Mi
+  accessModes:
+    - ReadOnlyMany
+---
+#----------------------------------------------------------
+# Raphaël Nadeau
+# 2023-05-18
+# Creation d'un volume longhorn, le pv est creer automatiquement
+# ref : https://www.exoscale.com/syslog/longhorn-sks/
+#----------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: '2054198'
+  name: 2054198-nextcloud
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
